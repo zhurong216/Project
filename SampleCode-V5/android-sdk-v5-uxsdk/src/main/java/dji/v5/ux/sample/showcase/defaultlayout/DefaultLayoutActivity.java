@@ -181,7 +181,7 @@ public class DefaultLayoutActivity extends AppCompatActivity {
         DJINetworkManager.getInstance().addNetworkStatusListener(networkStatusListener);
 
     }
-
+    // 设置一些控件是否可见
     private void isGimableAdjustClicked(BroadcastValues broadcastValues) {
         if (mDrawerLayout.isDrawerOpen(GravityCompat.END)) {
             mDrawerLayout.closeDrawers();
@@ -191,7 +191,7 @@ public class DefaultLayoutActivity extends AppCompatActivity {
             gimbalFineTuneWidget.setVisibility(View.VISIBLE);
         }
     }
-
+    // 初始化点击事件
     private void initClickListener() {
         secondaryFPVWidget.setOnClickListener(v -> swapVideoSource());
 

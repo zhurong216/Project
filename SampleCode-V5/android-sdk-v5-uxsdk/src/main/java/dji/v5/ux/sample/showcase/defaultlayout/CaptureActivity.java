@@ -1,16 +1,11 @@
 package dji.v5.ux.sample.showcase.defaultlayout;
 
 import android.Manifest;
-import android.content.pm.PackageManager;
-import android.graphics.Camera;
-import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
-import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
@@ -20,20 +15,17 @@ import android.widget.ToggleButton;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dji.sdk.keyvalue.value.common.ComponentIndexType;
 import dji.v5.manager.datacenter.MediaDataCenter;
-import dji.v5.manager.datacenter.camera.CameraStreamManager;
 import dji.v5.manager.interfaces.ICameraStreamManager;
-import dji.v5.utils.common.JsonUtil;
-import dji.v5.utils.common.LogUtils;
 import dji.v5.ux.R;
+import dji.v5.ux.cameracore.widget.cameracapture.CameraCaptureWidget;
 
 public class CaptureActivity extends AppCompatActivity {
     private static String TAG = "CaptureActivity";
@@ -46,6 +38,7 @@ public class CaptureActivity extends AppCompatActivity {
     private TextView recordingTime; // 录制时间
 
     Surface surface = null;
+    List<ComponentIndexType> cameraList = new ArrayList<>();    // 可用相机列表
 
     private static final String[] REQUIRED_PERMISSION_LIST = new String[]{
             Manifest.permission.VIBRATE,
@@ -66,6 +59,9 @@ public class CaptureActivity extends AppCompatActivity {
     private List<String> missingPermission = new ArrayList<>();
     private AtomicBoolean isRegistrationInProgress = new AtomicBoolean(false);
     private static final int REQUEST_PERMISSION_CODE = 12345;
+    private final ICameraStreamManager.AvailableCameraUpdatedListener availableCameraUpdatedListener = availableCameraList -> {
+        runOnUiThread(() -> updateSource(availableCameraList));
+    };
 
 
     @Override
@@ -76,14 +72,7 @@ public class CaptureActivity extends AppCompatActivity {
         // 初始化控件
         initUi();
         // 添加可用相机源
-        MediaDataCenter.getInstance().getCameraStreamManager().addAvailableCameraUpdatedListener(new ICameraStreamManager.AvailableCameraUpdatedListener() {
-            @Override
-            public void onAvailableCameraUpdated(@NonNull List<ComponentIndexType> availableCameraList) {
-                if (availableCameraList.size() > 0) {
-                    MediaDataCenter.getInstance().getCameraStreamManager().putCameraStreamSurface(availableCameraList.get(0), surface, 300,600, ICameraStreamManager.ScaleType.CENTER_INSIDE);
-                }
-            }
-        });
+        MediaDataCenter.getInstance().getCameraStreamManager().addAvailableCameraUpdatedListener(availableCameraUpdatedListener);
     }
     // 初始化UI
     private void initUi() {
@@ -100,21 +89,21 @@ public class CaptureActivity extends AppCompatActivity {
         mCaptureBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                
+                takePicture();
             }
         });
         // 保存点击事件
         mSaveBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
+                saveResult();
             }
         });
         // 删除点击事件
         mDeleteBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
+                deleteResult();
             }
         });
         // 录像点击事件
@@ -125,10 +114,49 @@ public class CaptureActivity extends AppCompatActivity {
             }
         });
     }
+    private void takePicture() {
+
+    }
+    private void saveResult() {
+
+    }
+    private void deleteResult() {
+
+    }
+    private void startRecord() {
+
+    }
+    private void stopRecord() {
+
+    }
+
+    private void updateSource(List<ComponentIndexType> availableCameraList) {
+        Log.d(TAG, "updateSource: 个数："+availableCameraList.size());
+        if (availableCameraList.size() > 0) {
+            ComponentIndexType primarySource = getSuitableSource(cameraList, ComponentIndexType.LEFT_OR_MAIN);
+            MediaDataCenter.getInstance().getCameraStreamManager().putCameraStreamSurface(primarySource, surface, 2000,1000, ICameraStreamManager.ScaleType.CENTER_CROP);
+        }
+        else {
+            Log.d(TAG, "updateSource: 未获取到相机源");
+        }
+    }
+
+    private ComponentIndexType getSuitableSource(List<ComponentIndexType> cameraList, ComponentIndexType defaultSource) {
+        if (cameraList.contains(ComponentIndexType.LEFT_OR_MAIN)) {
+            return ComponentIndexType.LEFT_OR_MAIN;
+        } else if (cameraList.contains(ComponentIndexType.RIGHT)) {
+            return ComponentIndexType.RIGHT;
+        } else if (cameraList.contains(ComponentIndexType.UP)) {
+            return ComponentIndexType.UP;
+        }
+        return defaultSource;
+    }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        MediaDataCenter.getInstance().getCameraStreamManager().removeAvailableCameraUpdatedListener(availableCameraUpdatedListener);
         MediaDataCenter.getInstance().getCameraStreamManager().removeCameraStreamSurface(surface);
+        Log.d(TAG, "onDestroy: 回收监听器");
     }
 }

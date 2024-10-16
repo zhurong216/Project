@@ -95,8 +95,6 @@ public class CaptureActivity extends AppCompatActivity {
     private int newFileIndex = 0;
 
 
-
-
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -119,11 +117,18 @@ public class CaptureActivity extends AppCompatActivity {
         surface = mVideoSurface.getHolder().getSurface();
         djisdkModel = DJISDKModel.getInstance();
         keyManager = KeyManager.getInstance();   // 创建管理者
+        keyManager.listen(KeyTools.createCameraKey(CameraKey.KeyNewlyGeneratedMediaFile, primarySource, CameraLensType.CAMERA_LENS_DEFAULT), this, new CommonCallbacks.KeyListener<GeneratedMediaFileInfo>() {
+            @Override
+            public void onValueChange(@Nullable GeneratedMediaFileInfo generatedMediaFileInfo, @Nullable GeneratedMediaFileInfo t1) {
+                Log.d(TAG, "onValueChange: 媒体资源已更新:"+String.valueOf(newFileIndex));
+                newFileIndex = generatedMediaFileInfo.getIndex();
+            }
+        });
             // 下载相关组件
         mediaDataCenter = MediaDataCenter.getInstance();
         mediaFile = new MediaFile();
         mediaManager = MediaManager.getInstance();
-        mediaFileListData = new MediaFileListData();
+        mediaFileListData = mediaManager.getMediaFileListData();
             // 更新文件列表状态
         mediaManager.addMediaFileListStateListener(new MediaFileListStateListener() {
             @Override
@@ -147,12 +152,15 @@ public class CaptureActivity extends AppCompatActivity {
         mSaveBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (statusCamera == 2) {
+                if (statusCamera == 2 || statusVideo == 2) {
                     try {
                         saveResult();
                     } catch (FileNotFoundException e) {
                         throw new RuntimeException(e);
                     }
+                }
+                else {
+                    Log.d(TAG, "onClick: 无数据");
                 }
             }
         });
@@ -161,13 +169,17 @@ public class CaptureActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (statusCamera == 2)deleteResult();
+                else Log.d(TAG, "onClick: 无数据");
             }
         });
         // 录像点击事件
         mRecordBtn.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                
+                if (statusVideo == 0) startRecord();
+                else if (statusVideo == 1) {
+                    stopRecord();
+                }
             }
         });
     }
@@ -196,12 +208,6 @@ public class CaptureActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull IDJIError idjiError) {
                 Log.d(TAG, "onFailure: 执行拍照动作失败");
-            }
-        });
-        keyManager.listen(KeyTools.createCameraKey(CameraKey.KeyNewlyGeneratedMediaFile, primarySource, CameraLensType.CAMERA_LENS_DEFAULT), this, new CommonCallbacks.KeyListener<GeneratedMediaFileInfo>() {
-            @Override
-            public void onValueChange(@Nullable GeneratedMediaFileInfo generatedMediaFileInfo, @Nullable GeneratedMediaFileInfo t1) {
-                newFileIndex = generatedMediaFileInfo.getIndex();
             }
         });
 
@@ -260,6 +266,8 @@ public class CaptureActivity extends AppCompatActivity {
                     LogUtils.e("MediaFile", "close error$error");
                 }
                 LogUtils.i("MediaFile" , "${mediaFile.fileIndex }  download finish"  );
+                statusVideo = 0;
+                statusCamera = 0;
             }
 
             @Override
@@ -317,12 +325,13 @@ public class CaptureActivity extends AppCompatActivity {
                 }
             });
         }
+
     }
 
     private void updateSource(List<ComponentIndexType> availableCameraList) {
         Log.d(TAG, "updateSource: 个数："+availableCameraList.size());
         if (availableCameraList.size() > 0) {
-            ComponentIndexType primarySource = getSuitableSource(cameraList, ComponentIndexType.LEFT_OR_MAIN);
+            primarySource = getSuitableSource(cameraList, ComponentIndexType.LEFT_OR_MAIN);
             mediaDataCenter.getCameraStreamManager().putCameraStreamSurface(primarySource, surface, 2000,1000, ICameraStreamManager.ScaleType.CENTER_CROP);
             statusCamera = 0;     // 可以拍照
         }
@@ -349,6 +358,7 @@ public class CaptureActivity extends AppCompatActivity {
         mediaDataCenter.getCameraStreamManager().removeAvailableCameraUpdatedListener(availableCameraUpdatedListener);
         mediaDataCenter.getCameraStreamManager().removeCameraStreamSurface(surface);
         mediaManager.removeAllMediaFileListStateListener(); // 移除所有文件列表状态监听器
+        keyManager.cancelListen(KeyTools.createCameraKey(CameraKey.KeyNewlyGeneratedMediaFile, primarySource, CameraLensType.CAMERA_LENS_DEFAULT), this);
         Log.d(TAG, "onDestroy: 回收监听器");
     }
 }

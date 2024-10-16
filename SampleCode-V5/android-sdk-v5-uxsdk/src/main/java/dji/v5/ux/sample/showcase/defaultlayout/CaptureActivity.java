@@ -76,8 +76,8 @@ public class CaptureActivity extends AppCompatActivity {
     Surface surface = null;
     List<ComponentIndexType> cameraList = new ArrayList<>();    // 可用相机列表
     private KeyManager keyManager = null;
-    private int statusCamera = 0;    // -1：表示不能拍照 // 0：可以拍照 // 1：正在拍照 // 2：拍照结束
-    private int statusVideo = 0;   // -1：不能录制 // 0:可以录制 // 1:正在录制 // 2：录制结束
+    private int statusCamera = -1;    // -1：表示不能拍照 // 0：可以拍照 // 1：正在拍照 // 2：拍照结束
+    private int statusVideo = -1;   // -1：不能录制 // 0:可以录制 // 1:正在录制 // 2：录制结束
 
     private List<String> missingPermission = new ArrayList<>();
     private AtomicBoolean isRegistrationInProgress = new AtomicBoolean(false);
@@ -117,13 +117,6 @@ public class CaptureActivity extends AppCompatActivity {
         surface = mVideoSurface.getHolder().getSurface();
         djisdkModel = DJISDKModel.getInstance();
         keyManager = KeyManager.getInstance();   // 创建管理者
-        keyManager.listen(KeyTools.createCameraKey(CameraKey.KeyNewlyGeneratedMediaFile, primarySource, CameraLensType.CAMERA_LENS_DEFAULT), this, new CommonCallbacks.KeyListener<GeneratedMediaFileInfo>() {
-            @Override
-            public void onValueChange(@Nullable GeneratedMediaFileInfo generatedMediaFileInfo, @Nullable GeneratedMediaFileInfo t1) {
-                Log.d(TAG, "onValueChange: 媒体资源已更新:"+String.valueOf(newFileIndex));
-                newFileIndex = generatedMediaFileInfo.getIndex();
-            }
-        });
             // 下载相关组件
         mediaDataCenter = MediaDataCenter.getInstance();
         mediaFile = new MediaFile();
@@ -334,6 +327,15 @@ public class CaptureActivity extends AppCompatActivity {
             primarySource = getSuitableSource(cameraList, ComponentIndexType.LEFT_OR_MAIN);
             mediaDataCenter.getCameraStreamManager().putCameraStreamSurface(primarySource, surface, 2000,1000, ICameraStreamManager.ScaleType.CENTER_CROP);
             statusCamera = 0;     // 可以拍照
+            statusVideo = 0;    // 可以录像
+
+            keyManager.listen(KeyTools.createCameraKey(CameraKey.KeyNewlyGeneratedMediaFile, primarySource, CameraLensType.CAMERA_LENS_DEFAULT), this, new CommonCallbacks.KeyListener<GeneratedMediaFileInfo>() {
+                @Override
+                public void onValueChange(@Nullable GeneratedMediaFileInfo generatedMediaFileInfo, @Nullable GeneratedMediaFileInfo t1) {
+                    Log.d(TAG, "onValueChange: 媒体资源已更新:"+String.valueOf(newFileIndex));
+                    newFileIndex = generatedMediaFileInfo.getIndex();
+                }
+            });
         }
         else {
             Log.d(TAG, "updateSource: 未获取到相机源");

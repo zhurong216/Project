@@ -136,10 +136,10 @@ class MediaFragment : DJIFragment() {
 
         btn_download.setOnClickListener {
             val mediafiles = ArrayList<MediaFile>()
-            if (adapter?.getSelectedItems()?.size != 0)
+            if (adapter?.getSelectedItems()?.size != 0) {
                 mediafiles.addAll(adapter?.getSelectedItems()!!)
                 mediaVM.downloadMediaFile(mediafiles)
-
+            }
         }
 
         btn_set_xmp_custom_info.setOnClickListener {

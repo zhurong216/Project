@@ -50,6 +50,7 @@ import dji.v5.manager.datacenter.media.MediaFileListData;
 import dji.v5.manager.datacenter.media.MediaFileListState;
 import dji.v5.manager.datacenter.media.MediaFileListStateListener;
 import dji.v5.manager.datacenter.media.MediaManager;
+import dji.v5.manager.datacenter.media.PullMediaFileListParam;
 import dji.v5.manager.interfaces.ICameraStreamManager;
 import dji.v5.manager.interfaces.IKeyManager;
 import dji.v5.manager.interfaces.IMediaDataCenter;
@@ -88,11 +89,11 @@ public class CaptureActivity extends AppCompatActivity {
     private DJISDKModel djisdkModel = null;
     private IMediaDataCenter mediaDataCenter = null;    // 相机预览
     private MediaFile mediaFile = null; // 下载媒体文件
-    private MediaManager mediaManager = null; // 媒体文件管理器
-    MediaFileListData mediaFileListData = null;
+    private IMediaManager mediaManager = null; // 媒体文件管理器
+    MutableLiveData<MediaFileListData> mediaFileListData = null;
     MutableLiveData<MediaFileListState> fileListState = new MutableLiveData<MediaFileListState>();
     MutableLiveData<Boolean> isPlayBack = new MutableLiveData<Boolean>();
-    private int newFileIndex = 0;
+    private Integer newFileIndex = 0;
 
 
     @Override
@@ -104,6 +105,7 @@ public class CaptureActivity extends AppCompatActivity {
         initUi();
         // 添加可用相机源
         mediaDataCenter.getCameraStreamManager().addAvailableCameraUpdatedListener(availableCameraUpdatedListener);
+
     }
     // 初始化UI
     private void initUi() {
@@ -120,15 +122,9 @@ public class CaptureActivity extends AppCompatActivity {
             // 下载相关组件
         mediaDataCenter = MediaDataCenter.getInstance();
         mediaFile = new MediaFile();
-        mediaManager = MediaManager.getInstance();
-        mediaFileListData = mediaManager.getMediaFileListData();
-            // 更新文件列表状态
-        mediaManager.addMediaFileListStateListener(new MediaFileListStateListener() {
-            @Override
-            public void onUpdate(MediaFileListState mediaFileListState) {
-                fileListState.postValue(mediaFileListState);
-            }
-        });
+        mediaManager =  MediaDataCenter.getInstance().getMediaManager();
+            // 更新文件列表状态：添加文件列表更新状态监听
+        addMediaFileListStateListener();
 
         if (keyManager == null) Log.d(TAG, "initUi: 管理者创建未成功");
         else Log.d(TAG, "initUi: 创建成功");
@@ -145,6 +141,7 @@ public class CaptureActivity extends AppCompatActivity {
         mSaveBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                Log.d(TAG, "onClick: ");
                 if (statusCamera == 2 || statusVideo == 2) {
                     try {
                         saveResult();
@@ -176,6 +173,55 @@ public class CaptureActivity extends AppCompatActivity {
             }
         });
     }
+    private void addMediaFileListStateListener() {
+        Log.d(TAG, "addMediaFileListStateListener: 文件列表状态信息："+fileListState);
+        MediaDataCenter.getInstance().getMediaManager().addMediaFileListStateListener(new MediaFileListStateListener() {
+            @Override
+            public void onUpdate(MediaFileListState mediaFileListState) {
+                fileListState.postValue(mediaFileListState);
+                Log.d(TAG, "onUpdate: mediaFileListState："+fileListState.toString());
+
+                if (mediaFileListState.equals(MediaFileListState.UP_TO_DATE) ) {
+                    Log.d(TAG, "onUpdate: 状态为 up_to_date");
+                }
+                else if (mediaFileListState == MediaFileListState.UPDATING) {
+                    Log.d(TAG, "onUpdate: 状态为 updating");
+                }
+                else if (mediaFileListState == MediaFileListState.IDLE) {
+                    Log.d(TAG, "onUpdate: 状态为 idle");
+                }
+            }
+        });
+    }
+    private void pullMediaFileListFromCamera() {
+        Log.d(TAG, "pullMediaFileListFromCamera: 拉取文件");
+        MediaDataCenter.getInstance().getMediaManager().pullMediaFileListFromCamera(
+                new PullMediaFileListParam.Builder().mediaFileIndex(newFileIndex).count(10).build(),
+                new CommonCallbacks.CompletionCallback() {
+                    @Override
+                    public void onSuccess() {
+                        Log.d(TAG, "onSuccess: 拉取文件列表成功！");
+                        MediaFileListData date = MediaDataCenter.getInstance().getMediaManager().getMediaFileListData();
+                        Log.d(TAG, "onSuccess: 输出长度："+date.getData().size());
+                        // 执行下载任务
+                        try {
+                            for (MediaFile it : date.getData()) {
+                                downloadFile(it);
+                            }
+                            Log.d(TAG, "onSuccess: 下载完成");
+                        } catch (FileNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                    @Override
+                    public void onFailure(@NonNull IDJIError idjiError) {
+                        Log.d(TAG, "onFailure: 拉取文件列表失败！");
+                    }
+                }
+        );
+    }
+
+
     private void takePicture() {
         Log.d(TAG, "takePicture: 设置拍照模式");
         statusCamera = 1;   // 正在拍照
@@ -203,11 +249,16 @@ public class CaptureActivity extends AppCompatActivity {
                 Log.d(TAG, "onFailure: 执行拍照动作失败");
             }
         });
-
     }
+
     // 保存
     private void saveResult() throws FileNotFoundException {
-        downloadFile(mediaFileListData.getData().get(newFileIndex));
+
+        if (fileListState.getValue().equals(MediaFileListState.IDLE)) {
+            Log.d(TAG, "saveResult: 执行文件拉取动作");
+            pullMediaFileListFromCamera();
+        }
+        // downloadFile(mediaManager.getMediaFileListData().getData().get(newFileIndex));
         statusCamera = 0;   // 重置相机状态
         statusVideo = 0;
     }
@@ -271,7 +322,6 @@ public class CaptureActivity extends AppCompatActivity {
 
     }
     private void deleteResult() {
-        mediaFileListData.getData().remove(newFileIndex);
         statusCamera = 0;   // 重置相机状态
         statusVideo = 0;
     }
@@ -309,6 +359,7 @@ public class CaptureActivity extends AppCompatActivity {
                 @Override
                 public void onSuccess(EmptyMsg emptyMsg) {
                     Log.d(TAG, "onSuccess: 结束录制成功");
+                    recordingTime.setText("");
                     statusVideo = 2;
                 }
 
@@ -326,16 +377,23 @@ public class CaptureActivity extends AppCompatActivity {
         if (availableCameraList.size() > 0) {
             primarySource = getSuitableSource(cameraList, ComponentIndexType.LEFT_OR_MAIN);
             mediaDataCenter.getCameraStreamManager().putCameraStreamSurface(primarySource, surface, 2000,1000, ICameraStreamManager.ScaleType.CENTER_CROP);
-            statusCamera = 0;     // 可以拍照
-            statusVideo = 0;    // 可以录像
-
+            // 添加文件列表状态监听
             keyManager.listen(KeyTools.createCameraKey(CameraKey.KeyNewlyGeneratedMediaFile, primarySource, CameraLensType.CAMERA_LENS_DEFAULT), this, new CommonCallbacks.KeyListener<GeneratedMediaFileInfo>() {
                 @Override
                 public void onValueChange(@Nullable GeneratedMediaFileInfo generatedMediaFileInfo, @Nullable GeneratedMediaFileInfo t1) {
-                    Log.d(TAG, "onValueChange: 媒体资源已更新:"+String.valueOf(newFileIndex));
-                    newFileIndex = generatedMediaFileInfo.getIndex();
+                    Log.d(TAG, "onValueChange: 媒体资源已更新:");
+                    if (t1 != null) {
+                        Log.d(TAG, "onValueChange: ");
+                        newFileIndex = t1.getIndex();
+                        Log.d(TAG, "onValueChange: 新文件下标："+String.valueOf(newFileIndex));
+                    }
+                    else Log.d(TAG, "onValueChange: 空指针");
+
                 }
             });
+
+            statusCamera = 0;     // 可以拍照
+            statusVideo = 0;    // 可以录像
         }
         else {
             Log.d(TAG, "updateSource: 未获取到相机源");
